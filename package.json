@@ -1,7 +1,7 @@
 {
   "name": "github-node-pre-gyp",
   "version": "0.0.0-alpha.14",
-  "description": "A node-pre-gyp module which provides the ability to publish to GitHub releases.",
+  "description": "A node-pre-gyp module which provides the ability to publish and install to/from GitHub releases.",
   "bin": "./bin/node-pre-gyp-github.js",
   "main": "index.js",
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bchr02/node-pre-gyp-github.git"
+    "url": "git+https://github.com/lurenzsgp/node-pre-gyp-github.git"
   },
   "keywords": [
     "node-pre-gyp",
@@ -36,7 +36,7 @@
     "nyc": "^12.0.2",
     "sinon": "^6.1.4"
   },
-  "author": "Bill Christo",
+  "author": "Lorenzo Cazzoli",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/bchr02/node-pre-gyp-github/issues"
