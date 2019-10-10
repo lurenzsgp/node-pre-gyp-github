@@ -1,9 +1,12 @@
 "use strict";
 
-var path = require("path");
-var fs = require('fs');
-var mime = require("mime-types");
-var cwd = process.cwd();
+const path = require("path");
+const fs = require('fs');
+const mime = require("mime-types");
+const cwd = process.cwd();
+const os = require('os');
+const request = require("request");
+const tar = require('tar');
 
 var verbose;
 var consoleLog = function(x){
@@ -15,9 +18,9 @@ NodePreGypGithub.prototype.octokit = require("@octokit/rest");
 NodePreGypGithub.prototype.stage_dir = path.join(cwd,"build","stage");
 NodePreGypGithub.prototype.init = function() {
 	var ownerRepo, hostPrefix;
-	
-	this.package_json = JSON.parse(fs.readFileSync(path.join(cwd,'package.json')));
-	
+
+	this.package_json = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json')));
+
 	if(!this.package_json.repository || !this.package_json.repository.url){
 		throw new Error('Missing repository.url in package.json');
 	}
@@ -31,7 +34,7 @@ NodePreGypGithub.prototype.init = function() {
 		}
 		else throw new Error('A correctly formatted GitHub repository.url was not found within package.json');
 	}
-	
+
 	hostPrefix = 'https://' + this.host + '/' + this.owner + '/' + this.repo + '/releases/download/';
 	if(!this.package_json.binary || 'object' !== typeof this.package_json.binary || 'string' !== typeof this.package_json.binary.host){
 		throw new Error('Missing binary.host in package.json');
@@ -69,7 +72,7 @@ NodePreGypGithub.prototype.createRelease = function(args, callback) {
 		'draft': true,
 		'prerelease': false
 	};
-	
+
 	Object.keys(args).forEach(function(key) {
 		if(args.hasOwnProperty(key) && options.hasOwnProperty(key)) {
 			options[key] = args[key];
@@ -101,9 +104,9 @@ NodePreGypGithub.prototype.uploadAssets = function(){
 	consoleLog("Stage directory path: " + path.join(this.stage_dir));
 	fs.readdir(path.join(this.stage_dir), function(err, files){
 		if(err) throw err;
-		
+
 		if(!files.length) throw new Error('No files found within the stage directory: ' + this.stage_dir);
-		
+
 		files.forEach(function(file){
       if(this.release && this.release.assets) {
 			  asset = this.release.assets.filter(function(element, index, array){
@@ -133,7 +136,7 @@ NodePreGypGithub.prototype.publish = function(options) {
 	}, function(err, data){
 		var release;
 		if(err) throw err;
-		
+
 		// when remote_path is set expect files to be in stage_dir / remote_path after substitution
 		if (this.package_json.binary.remote_path) {
 			options.tag_name = this.package_json.binary.remote_path.replace(/\{version\}/g, this.package_json.version);
@@ -163,6 +166,76 @@ NodePreGypGithub.prototype.publish = function(options) {
 			this.uploadAssets();
 		}
 	}.bind(this));
+};
+
+NodePreGypGithub.prototype.find_asset = function(config)
+{
+	return new Promise(async (resolve, reject) =>
+	{
+		try
+		{
+			this.octokit.authenticate(this.authenticate_settings());
+
+			const release = await this.octokit.repos.getReleaseByTag({
+				owner: this.owner,
+				repo: this.repo,
+				tag: config.version
+			});
+
+			release.data.assets.forEach((element) =>
+			{
+				if(element.name === config.name)
+					return resolve(element.id);
+			});
+		}
+		catch(error)
+		{
+			reject(error);
+		}
+	})
+};
+
+NodePreGypGithub.prototype.download_asset = function(asset_id, build_path)
+{
+	const options = {
+		method: 'GET',
+		url: `https://api.github.com/repos/cubbit/cubbit/releases/assets/${asset_id}`,
+		headers: {
+			authorization: `token ${process.env.NODE_PRE_GYP_GITHUB_TOKEN}`,
+			accept: 'application/octet-stream',
+			'User-Agent': 'Awesome-Octocat-App'
+		}
+	};
+
+	console.log('Downloading file');
+
+	request(options)
+		.on('response', () =>
+		{
+			console.log('Extracting file');
+			fs.mkdirSync(build_path, {recursive: true});
+		})
+		.pipe(tar.x({cwd: build_path}))
+};
+
+NodePreGypGithub.prototype.install = async function(options)
+{
+	options = (typeof options === 'undefined') ? {} : options;
+	verbose = (typeof options.verbose === 'undefined' || options.verbose) ? true : false;
+
+	this.init();
+	this.octokit.authenticate(this.authenticate_settings());
+	const response = await this.octokit.repos.listReleases({owner: this.owner, repo: this.repo});
+
+	const name = this.package_json.binary.package_name.replace(/\{platform\}/g, os.platform).replace(/\{arch\}/g, os.arch);
+
+	console.log('Searching remote file:', name);
+	if(response.data.length === 0)
+		throw new Error(`No release found for ${this.owner}/${this.repo}`);
+
+	const asset_id = await this.find_asset({tag_name: this.package_json.version, version: this.package_json.version, name});
+	const build_path = path.resolve(cwd, 'build');
+	this.download_asset(asset_id, build_path);
 };
 
 module.exports = NodePreGypGithub;

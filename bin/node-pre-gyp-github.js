@@ -17,12 +17,24 @@ program
 	});
 
 program
+	.command('install [options]')
+	.description('download the prebuild from the current version\'s GitHub release, for the machine architecture')
+	.option("-s, --silent", "turns verbose messages off")
+	.action(async function(cmd, options){
+		var opts = {},
+			x = new module();
+		opts.verbose = options.silent ? false : true;
+		await x.install(opts);
+	});
+
+program
 	.command('help','',{isDefault: true, noHelp: true})
 	.action(function() {
 		console.log();
 		console.log('Usage: node-pre-gyp-github publish');
 		console.log();
 		console.log('publishes the contents of .\\build\\stage\\{version} to the current version\'s GitHub release');
+		// TODO: add install explaination
 	});
 
 program.parse(process.argv);
